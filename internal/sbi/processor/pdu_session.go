@@ -131,7 +131,9 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		SingleNssai: smContext.SNssai,
 	}
 
-	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NrfNfManagementNfType_UDM)
+	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtxForNFInstance(
+		models.ServiceName_NUDM_SDM, models.NrfNfManagementNfType_UDM,
+		smf_context.GetSelf().UDMProfile.NfInstanceId)
 	if oauthErr != nil {
 		smContext.Log.Errorf("Get Token Context Error[%v]", oauthErr)
 		return
@@ -1456,7 +1458,8 @@ func (p *Processor) sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMCon
 	// Start T3592
 	t3592 := factory.SmfConfig.Configuration.T3592
 	if t3592.Enable {
-		ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
+		ctx, _, err := smf_context.GetSelf().GetTokenCtxForNFInstance(
+			models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF, smContext.AMFProfile.NfInstanceId)
 		if err != nil {
 			smContext.Log.Warnf("Get namf-comm token failed: %+v", err)
 			return
@@ -1505,7 +1508,8 @@ func (p *Processor) sendGSMPDUSessionModificationCommand(smContext *smf_context.
 	// Start T3591
 	t3591 := factory.SmfConfig.Configuration.T3591
 	if t3591.Enable {
-		ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
+		ctx, _, err := smf_context.GetSelf().GetTokenCtxForNFInstance(
+			models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF, smContext.AMFProfile.NfInstanceId)
 		if err != nil {
 			smContext.Log.Warnf("Get namf-comm token failed: %+v", err)
 			return

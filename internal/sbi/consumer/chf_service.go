@@ -116,7 +116,8 @@ func (s *nchfService) SendConvergedChargingRequest(
 	req := s.buildConvergedChargingRequest(smContext, multipleUnitUsage)
 
 	ctx, pd, err := smf_context.GetSelf().
-		GetTokenCtx(models.ServiceName_NCHF_CONVERGEDCHARGING, models.NrfNfManagementNfType_CHF)
+		GetTokenCtxForNFInstance(models.ServiceName_NCHF_CONVERGEDCHARGING,
+			models.NrfNfManagementNfType_CHF, smContext.SelectedCHFProfile.NfInstanceId)
 	if err != nil {
 		return nil, pd, err
 	}

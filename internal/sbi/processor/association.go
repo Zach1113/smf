@@ -220,7 +220,8 @@ func (p *Processor) requestAMFToReleasePDUResources(
 		}
 	}
 
-	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
+	ctx, _, errToken := smf_context.GetSelf().GetTokenCtxForNFInstance(
+		models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF, smContext.AMFProfile.NfInstanceId)
 	if errToken != nil {
 		return false, false
 	}

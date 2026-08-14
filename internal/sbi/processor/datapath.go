@@ -289,7 +289,8 @@ func (p *Processor) sendPDUSessionEstablishmentReject(
 
 	smContext.SetState(smf_context.InActive)
 
-	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
+	ctx, _, errToken := smf_context.GetSelf().GetTokenCtxForNFInstance(
+		models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF, smContext.AMFProfile.NfInstanceId)
 	if errToken != nil {
 		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", errToken)
 		return
@@ -347,7 +348,8 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 		},
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
+	ctx, _, err := smf_context.GetSelf().GetTokenCtxForNFInstance(
+		models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF, smContext.AMFProfile.NfInstanceId)
 	if err != nil {
 		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", err)
 		return
