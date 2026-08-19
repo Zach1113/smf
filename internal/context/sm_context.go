@@ -12,9 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"github.com/free5gc/nas/nasConvert"
-	"github.com/free5gc/nas/nasMessage"
-	"github.com/free5gc/ngap/ngapType"
+	nasie "github.com/free5gc/nas/ie"
+	ngapie "github.com/free5gc/ngap/ie"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
@@ -87,7 +86,7 @@ func GetSMContextCount() uint64 {
 }
 
 type EventExposureNotification struct {
-	*models.NsmfEventExposureNotification
+	*models.Smf_EvtExpos_NsmfEventExposureNotification
 
 	Uri string
 }
@@ -104,13 +103,13 @@ type UsageReport struct {
 	UplinkPktNum   uint64
 	DownlinkPktNum uint64
 
-	ReportTpye models.ChfConvergedChargingTriggerType
+	ReportTpye models.Chf_ConvCharging_TriggerType
 }
 
 var TeidGenerator *idgenerator.IDGenerator
 
 type SMContext struct {
-	*models.SmfPduSessionSmContextCreateData
+	*models.Smf_PDUSess_SmContextCreateData
 
 	Ref string
 
@@ -129,37 +128,37 @@ type SMContext struct {
 	LocalDLTeidForSplitPDUSession uint32
 	NrdcIndicator                 bool
 
-	UpCnxState models.UpCnxState
+	UpCnxState models.Smf_PDUSess_UpCnxState
 
-	HoState models.HoState
+	HoState models.Smf_PDUSess_HoState
 
 	SelectionParam         *UPFSelectionParams
 	PDUAddress             net.IP
 	UseStaticIP            bool
 	SelectedPDUSessionType uint8
 
-	DnnConfiguration models.DnnConfiguration
+	DnnConfiguration models.Udm_SDM_DnnConfiguration
 
 	SMPolicyID string
 
 	// Handover related
 	DLForwardingType         DLForwardingType
-	DLDirectForwardingTunnel *ngapType.UPTransportLayerInformation
+	DLDirectForwardingTunnel *ngapie.UPTransportLayerInformation
 	IndirectForwardingTunnel *DataPath
 
 	// UP Security support TS 29.502 R16 6.1.6.2.39
 	UpSecurity                                                     *models.UpSecurity
-	MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink   models.MaxIntegrityProtectedDataRate
-	MaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink models.MaxIntegrityProtectedDataRate
+	MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink   models.Smf_PDUSess_MaxIntegrityProtectedDataRate
+	MaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink models.Smf_PDUSess_MaxIntegrityProtectedDataRate
 	// SMF verified UP security result of Xn-handover TS 33.501 6.6.1
 	UpSecurityFromPathSwitchRequestSameAsLocalStored bool
 
 	// Client
 	CommunicationClientApiPrefix string
 
-	AMFProfile         models.NrfNfDiscoveryNfProfile
-	SelectedPCFProfile models.NrfNfDiscoveryNfProfile
-	SelectedCHFProfile models.NrfNfDiscoveryNfProfile
+	AMFProfile         models.Nrf_NFDisc_NFProfile
+	SelectedPCFProfile models.Nrf_NFDisc_NFProfile
+	SelectedCHFProfile models.Nrf_NFDisc_NFProfile
 	SmStatusNotifyUri  string
 
 	Tunnel      *UPTunnel
@@ -178,8 +177,8 @@ type SMContext struct {
 	DCPCCRules          map[string]*PCCRule
 	SessionRules        map[string]*SessionRule
 	TrafficControlDatas map[string]*TrafficControlData
-	ChargingData        map[string]*models.ChargingData
-	QosDatas            map[string]*models.QosData
+	ChargingData        map[string]*models.Pcf_SMPolCtrl_ChargingData
+	QosDatas            map[string]*models.Pcf_SMPolCtrl_QosData
 
 	UpPathChgEarlyNotification map[string]*EventExposureNotification // Key: Uri+NotifId
 	UpPathChgLateNotification  map[string]*EventExposureNotification // Key: Uri+NotifId
@@ -300,7 +299,7 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	smContext.DCPCCRules = make(map[string]*PCCRule)
 	smContext.SessionRules = make(map[string]*SessionRule)
 	smContext.TrafficControlDatas = make(map[string]*TrafficControlData)
-	smContext.QosDatas = make(map[string]*models.QosData)
+	smContext.QosDatas = make(map[string]*models.Pcf_SMPolCtrl_QosData)
 	smContext.UpPathChgEarlyNotification = make(map[string]*EventExposureNotification)
 	smContext.UpPathChgLateNotification = make(map[string]*EventExposureNotification)
 	smContext.DataPathToBeRemoved = make(map[int64]*DataPath)
@@ -462,8 +461,8 @@ func (smContext *SMContext) GenerateUrrId() {
 	}
 }
 
-func (smContext *SMContext) BuildCreatedData() *models.SmfPduSessionSmContextCreatedData {
-	return &models.SmfPduSessionSmContextCreatedData{
+func (smContext *SMContext) BuildCreatedData() *models.Smf_PDUSess_SmContextCreatedData {
+	return &models.Smf_PDUSess_SmContextCreatedData{
 		SNssai: smContext.SNssai,
 	}
 }
@@ -486,22 +485,6 @@ func (smContext *SMContext) CheckState(state SMContextState) bool {
 
 func (smContext *SMContext) State() SMContextState {
 	return SMContextState(atomic.LoadUint32((*uint32)(&smContext.state)))
-}
-
-func (smContext *SMContext) PDUAddressToNAS() ([12]byte, uint8) {
-	var addr [12]byte
-	var addrLen uint8
-	copy(addr[:], smContext.PDUAddress)
-	switch smContext.SelectedPDUSessionType {
-	case nasMessage.PDUSessionTypeIPv4:
-		var addrLenBuf uint8 = 4 + 1
-		addrLen = addrLenBuf
-	case nasMessage.PDUSessionTypeIPv6:
-	case nasMessage.PDUSessionTypeIPv4IPv6:
-		var addrLenBuf uint8 = 12 + 1
-		addrLen = addrLenBuf
-	}
-	return addr, addrLen
 }
 
 func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcpType.NodeID {
@@ -671,15 +654,12 @@ func (c *SMContext) SelectDefaultDataPath() error {
 }
 
 func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
-	tcData *TrafficControlData, qosData *models.QosData,
-	chgData *models.ChargingData, pduChgDatas []*models.ChargingData,
+	tcData *TrafficControlData, qosData *models.Pcf_SMPolCtrl_QosData,
+	chgData *models.Pcf_SMPolCtrl_ChargingData, pduChgDatas []*models.Pcf_SMPolCtrl_ChargingData,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
-		if tcData.RouteToLocs[0] == nil {
-			return fmt.Errorf("RouteToLocs contains nil element for pcc rule[%s]", pccRule.PccRuleId)
-		}
-		targetRoute = *tcData.RouteToLocs[0]
+		targetRoute = tcData.RouteToLocs[0]
 	}
 	param := &UPFSelectionParams{
 		Dnn: c.Dnn,
@@ -722,15 +702,12 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 }
 
 func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
-	tcData *TrafficControlData, qosData *models.QosData,
-	chgData *models.ChargingData, pduChgDatas []*models.ChargingData,
+	tcData *TrafficControlData, qosData *models.Pcf_SMPolCtrl_QosData,
+	chgData *models.Pcf_SMPolCtrl_ChargingData, pduChgDatas []*models.Pcf_SMPolCtrl_ChargingData,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
-		if tcData.RouteToLocs[0] == nil {
-			return fmt.Errorf("RouteToLocs contains nil element for pcc rule[%s]", pccRule.PccRuleId)
-		}
-		targetRoute = *tcData.RouteToLocs[0]
+		targetRoute = tcData.RouteToLocs[0]
 	}
 	param := &UPFSelectionParams{
 		Dnn: c.Dnn,
@@ -774,7 +751,7 @@ func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
 }
 
 func (c *SMContext) BuildUpPathChgEventExposureNotification(
-	chgEvent *models.UpPathChgEvent,
+	chgEvent *models.Pcf_SMPolCtrl_UpPathChgEvent,
 	srcRoute, tgtRoute *models.RouteToLocation,
 ) {
 	if chgEvent == nil {
@@ -785,8 +762,8 @@ func (c *SMContext) BuildUpPathChgEventExposureNotification(
 		return
 	}
 
-	en := models.SmfEventExposureEventNotification{
-		Event:            models.SmfEvent_UP_PATH_CH,
+	en := models.Smf_EvtExpos_EventNotification{
+		Event:            models.Smf_EvtExpos_SmfEvent_UP_PATH_CH,
 		SourceTraRouting: srcRoute,
 		TargetTraRouting: tgtRoute,
 	}
@@ -821,19 +798,19 @@ func (c *SMContext) BuildUpPathChgEventExposureNotification(
 
 func newEventExposureNotification(
 	uri, id string,
-	en *models.SmfEventExposureEventNotification,
+	en *models.Smf_EvtExpos_EventNotification,
 ) *EventExposureNotification {
 	return &EventExposureNotification{
-		NsmfEventExposureNotification: &models.NsmfEventExposureNotification{
+		Smf_EvtExpos_NsmfEventExposureNotification: &models.Smf_EvtExpos_NsmfEventExposureNotification{
 			NotifId:     id,
-			EventNotifs: []models.SmfEventExposureEventNotification{*en},
+			EventNotifs: []models.Smf_EvtExpos_EventNotification{*en},
 		},
 		Uri: uri,
 	}
 }
 
 type NotifCallback func(uri string,
-	notification *models.NsmfEventExposureNotification)
+	notification *models.Smf_EvtExpos_NsmfEventExposureNotification)
 
 func (c *SMContext) SendUpPathChgNotification(chgType string, notifCb NotifCallback) {
 	var notifications map[string]*EventExposureNotification
@@ -847,7 +824,7 @@ func (c *SMContext) SendUpPathChgNotification(chgType string, notifCb NotifCallb
 	}
 	for k, n := range notifications {
 		c.Log.Infof("Send UpPathChg Event Exposure Notification [%s][%s] to NEF/AF", chgType, n.NotifId)
-		go notifCb(n.Uri, n.NsmfEventExposureNotification)
+		go notifCb(n.Uri, n.Smf_EvtExpos_NsmfEventExposureNotification)
 		delete(notifications, k)
 	}
 }
@@ -919,34 +896,34 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 	}
 
 	smContext.EstAcceptCause5gSMValue = 0
-	switch nasConvert.PDUSessionTypeToModels(requestedPDUSessionType) {
+	switch PDUSessionTypeToModels(requestedPDUSessionType) {
 	case models.PduSessionType_IPV4:
 		if allowIPv4 {
-			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_IPV4)
+			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV4)
 		} else {
 			return fmt.Errorf("PduSessionType_IPV4 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	case models.PduSessionType_IPV6:
 		if allowIPv6 {
-			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_IPV6)
+			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV6)
 		} else {
 			return fmt.Errorf("PduSessionType_IPV6 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	case models.PduSessionType_IPV4_V6:
 		if allowIPv4 && allowIPv6 {
-			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_IPV4_V6)
+			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV4_V6)
 		} else if allowIPv4 {
-			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_IPV4)
-			smContext.EstAcceptCause5gSMValue = nasMessage.Cause5GSMPDUSessionTypeIPv4OnlyAllowed
+			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV4)
+			smContext.EstAcceptCause5gSMValue = nasie.Cause5GSM_PDUSessTypeIpv4OnlyAllowed
 		} else if allowIPv6 {
-			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_IPV6)
-			smContext.EstAcceptCause5gSMValue = nasMessage.Cause5GSMPDUSessionTypeIPv6OnlyAllowed
+			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV6)
+			smContext.EstAcceptCause5gSMValue = nasie.Cause5GSM_PDUSessTypeIpv6OnlyAllowed
 		} else {
 			return fmt.Errorf("PduSessionType_IPV4_V6 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	case models.PduSessionType_ETHERNET:
 		if allowEthernet {
-			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_ETHERNET)
+			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_ETHERNET)
 		} else {
 			return fmt.Errorf("PduSessionType_ETHERNET is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}

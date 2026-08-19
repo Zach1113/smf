@@ -6,9 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/chf/ConvergedCharging"
+	"github.com/free5gc/openapi/chf/ConvCharging"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
@@ -20,10 +19,10 @@ type nchfService struct {
 
 	ConvergedChargingMu sync.RWMutex
 
-	ConvergedChargingClients map[string]*ConvergedCharging.APIClient
+	ConvergedChargingClients map[string]*ConvCharging.APIClient
 }
 
-func (s *nchfService) getConvergedChargingClient(uri string) *ConvergedCharging.APIClient {
+func (s *nchfService) getConvergedChargingClient(uri string) *ConvCharging.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -34,10 +33,10 @@ func (s *nchfService) getConvergedChargingClient(uri string) *ConvergedCharging.
 		return client
 	}
 
-	configuration := ConvergedCharging.NewConfiguration()
+	configuration := ConvCharging.NewConfiguration()
 	configuration.SetBasePath(uri)
 	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
-	client = ConvergedCharging.NewAPIClient(configuration)
+	client = ConvCharging.NewAPIClient(configuration)
 
 	s.ConvergedChargingMu.RUnlock()
 	s.ConvergedChargingMu.Lock()
@@ -47,9 +46,9 @@ func (s *nchfService) getConvergedChargingClient(uri string) *ConvergedCharging.
 }
 
 func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMContext,
-	multipleUnitUsage []models.ChfConvergedChargingMultipleUnitUsage,
-) *models.ChfConvergedChargingChargingDataRequest {
-	var triggers []models.ChfConvergedChargingTrigger
+	multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage,
+) *models.Chf_ConvCharging_ChargingDataRequest {
+	var triggers []models.Chf_ConvCharging_Trigger
 
 	smfContext := s.consumer.Context()
 	date := time.Now()
@@ -60,33 +59,33 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 		}
 	}
 
-	req := &models.ChfConvergedChargingChargingDataRequest{
+	req := &models.Chf_ConvCharging_ChargingDataRequest{
 		ChargingId:           smContext.ChargingID,
 		SubscriberIdentifier: smContext.Supi,
-		NfConsumerIdentification: &models.ChfConvergedChargingNfIdentification{
-			NodeFunctionality: models.ChfConvergedChargingNodeFunctionality_SMF,
+		NfConsumerIdentification: &models.Chf_ConvCharging_NFIdentification{
+			NodeFunctionality: models.Chf_ConvCharging_NodeFunctionality_SMF,
 			NFName:            smfContext.Name,
 			// not sure if NFIPv4Address is RegisterIPv4 or BindingIPv4
 			NFIPv4Address: smfContext.RegisterIPv4,
 		},
 		InvocationTimeStamp: &date,
 		Triggers:            triggers,
-		PDUSessionChargingInformation: &models.ChfConvergedChargingPduSessionChargingInformation{
+		PDUSessionChargingInformation: &models.Chf_ConvCharging_PDUSessionChargingInformation{
 			ChargingId: smContext.ChargingID,
-			UserInformation: &models.ChfConvergedChargingUserInformation{
+			UserInformation: &models.Chf_ConvCharging_UserInformation{
 				ServedGPSI: smContext.Gpsi,
 				ServedPEI:  smContext.Pei,
 			},
-			PduSessionInformation: &models.ChfConvergedChargingPduSessionInformation{
+			PduSessionInformation: &models.Chf_ConvCharging_PDUSessionInformation{
 				PduSessionID: smContext.PDUSessionID,
-				NetworkSlicingInfo: &models.NetworkSlicingInfo{
+				NetworkSlicingInfo: &models.Chf_ConvCharging_NetworkSlicingInfo{
 					SNSSAI: smContext.SNssai,
 				},
 
-				PduType: nasConvert.PDUSessionTypeToModels(smContext.SelectedPDUSessionType),
-				ServingNetworkFunctionID: &models.ChfConvergedChargingServingNetworkFunctionId{
-					ServingNetworkFunctionInformation: &models.ChfConvergedChargingNfIdentification{
-						NodeFunctionality: models.ChfConvergedChargingNodeFunctionality_AMF,
+				PduType: smf_context.PDUSessionTypeToModels(smContext.SelectedPDUSessionType),
+				ServingNetworkFunctionID: &models.Chf_ConvCharging_ServingNetworkFunctionID{
+					ServingNetworkFunctionInformation: &models.Chf_ConvCharging_NFIdentification{
+						NodeFunctionality: models.Chf_ConvCharging_NodeFunctionality_AMF,
 					},
 				},
 				DnnId: smContext.Dnn,
@@ -107,16 +106,16 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 func (s *nchfService) SendConvergedChargingRequest(
 	smContext *smf_context.SMContext,
 	requestType smf_context.RequestType,
-	multipleUnitUsage []models.ChfConvergedChargingMultipleUnitUsage,
+	multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage,
 ) (
-	*models.ChfConvergedChargingChargingDataResponse, *models.ProblemDetails, error,
+	*models.Chf_ConvCharging_ChargingDataResponse, *models.ProblemDetails, error,
 ) {
 	logger.ChargingLog.Info("Handle SendConvergedChargingRequest")
 
 	req := s.buildConvergedChargingRequest(smContext, multipleUnitUsage)
 
 	ctx, pd, err := smf_context.GetSelf().
-		GetTokenCtx(models.ServiceName_NCHF_CONVERGEDCHARGING, models.NrfNfManagementNfType_CHF)
+		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, models.Nrf_NFMgmt_NFType_CHF)
 	if err != nil {
 		return nil, pd, err
 	}
@@ -126,10 +125,10 @@ func (s *nchfService) SendConvergedChargingRequest(
 		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf("%s", errMsg)
 	}
 
-	var client *ConvergedCharging.APIClient
+	var client *ConvCharging.APIClient
 	// Create Converged Charging Client for this SM Context
 	for _, service := range smContext.SelectedCHFProfile.NfServices {
-		if service.ServiceName == models.ServiceName_NCHF_CONVERGEDCHARGING {
+		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING {
 			client = s.getConvergedChargingClient(service.ApiPrefix)
 		}
 	}
@@ -141,16 +140,16 @@ func (s *nchfService) SendConvergedChargingRequest(
 	// select the appropriate converged charging service based on trigger type
 	switch requestType {
 	case smf_context.CHARGING_INIT:
-		postChargingDataRequest := &ConvergedCharging.PostChargingDataRequest{
-			ChfConvergedChargingChargingDataRequest: req,
+		postChargingDataRequest := &ConvCharging.ChargingdataPostRequest{
+			RequestBody: req,
 		}
-		rspPost, localErr := client.DefaultApi.PostChargingData(ctx, postChargingDataRequest)
+		rspPost, localErr := client.DefaultApi.ChargingdataPost(ctx, postChargingDataRequest)
 
 		switch err := localErr.(type) {
 		case openapi.GenericOpenAPIError:
 			switch errModel := err.Model().(type) {
-			case ConvergedCharging.PostChargingDataError:
-				return nil, &errModel.ProblemDetails, nil
+			case ConvCharging.ChargingdataPostError:
+				return nil, errModel.ProblemDetails, nil
 			case error:
 				return nil, openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
 			default:
@@ -161,22 +160,22 @@ func (s *nchfService) SendConvergedChargingRequest(
 		case nil:
 			chargingDataRef := strings.Split(rspPost.Location, "/")
 			smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
-			return &rspPost.ChfConvergedChargingChargingDataResponse, nil, nil
+			return rspPost.Chf_ConvCharging_ChargingDataResponse, nil, nil
 		default:
 			return nil, nil, openapi.ReportError("server no response")
 		}
 	case smf_context.CHARGING_UPDATE:
-		updateChargingDataRequest := &ConvergedCharging.UpdateChargingDataRequest{
-			ChargingDataRef:                         &smContext.ChargingDataRef,
-			ChfConvergedChargingChargingDataRequest: req,
+		updateChargingDataRequest := &ConvCharging.ChargingdataChargingDataRefUpdatePostRequest{
+			ChargingDataRef: &smContext.ChargingDataRef,
+			RequestBody:     req,
 		}
-		rspUpdate, localErr := client.DefaultApi.UpdateChargingData(ctx, updateChargingDataRequest)
+		rspUpdate, localErr := client.DefaultApi.ChargingdataChargingDataRefUpdatePost(ctx, updateChargingDataRequest)
 
 		switch err := localErr.(type) {
 		case openapi.GenericOpenAPIError:
 			switch errModel := err.Model().(type) {
-			case ConvergedCharging.UpdateChargingDataError:
-				return nil, &errModel.ProblemDetails, nil
+			case ConvCharging.ChargingdataChargingDataRefUpdatePostError:
+				return nil, errModel.ProblemDetails, nil
 			case error:
 				return nil, openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
 			default:
@@ -185,22 +184,22 @@ func (s *nchfService) SendConvergedChargingRequest(
 		case error:
 			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
 		case nil:
-			return &rspUpdate.ChfConvergedChargingChargingDataResponse, nil, nil
+			return rspUpdate.Chf_ConvCharging_ChargingDataResponse, nil, nil
 		default:
 			return nil, nil, openapi.ReportError("server no response")
 		}
 	case smf_context.CHARGING_RELEASE:
-		releaseChargingDataRequest := &ConvergedCharging.ReleaseChargingDataRequest{
-			ChargingDataRef:                         &smContext.ChargingDataRef,
-			ChfConvergedChargingChargingDataRequest: req,
+		releaseChargingDataRequest := &ConvCharging.ChargingdataChargingDataRefReleasePostRequest{
+			ChargingDataRef: &smContext.ChargingDataRef,
+			RequestBody:     req,
 		}
-		_, localErr := client.DefaultApi.ReleaseChargingData(ctx, releaseChargingDataRequest)
+		_, localErr := client.DefaultApi.ChargingdataChargingDataRefReleasePost(ctx, releaseChargingDataRequest)
 
 		switch err := localErr.(type) {
 		case openapi.GenericOpenAPIError:
 			switch errModel := err.Model().(type) {
-			case ConvergedCharging.ReleaseChargingDataError:
-				return nil, &errModel.ProblemDetails, nil
+			case ConvCharging.ChargingdataChargingDataRefReleasePostError:
+				return nil, errModel.ProblemDetails, nil
 			case error:
 				return nil, openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
 			default:

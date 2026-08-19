@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/free5gc/nas/nasMessage"
+	nasie "github.com/free5gc/nas/ie"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/pfcp/pfcpUdp"
@@ -143,13 +143,13 @@ func NewUPFInterfaceInfo(i *factory.InterfaceUpfInfoItem) *UPFInterfaceInfo {
 // *** add unit test ***//
 // IP returns the IP of the user plane IP information of the pduSessType
 func (i *UPFInterfaceInfo) IP(pduSessType uint8) (net.IP, error) {
-	if (pduSessType == nasMessage.PDUSessionTypeIPv4 ||
-		pduSessType == nasMessage.PDUSessionTypeIPv4IPv6) && len(i.IPv4EndPointAddresses) != 0 {
+	if (pduSessType == nasie.PDUSessType_IPv4 ||
+		pduSessType == nasie.PDUSessType_IPv4v6) && len(i.IPv4EndPointAddresses) != 0 {
 		return i.IPv4EndPointAddresses[0], nil
 	}
 
-	if (pduSessType == nasMessage.PDUSessionTypeIPv6 ||
-		pduSessType == nasMessage.PDUSessionTypeIPv4IPv6) && len(i.IPv6EndPointAddresses) != 0 {
+	if (pduSessType == nasie.PDUSessType_IPv6 ||
+		pduSessType == nasie.PDUSessType_IPv4v6) && len(i.IPv6EndPointAddresses) != 0 {
 		return i.IPv6EndPointAddresses[0], nil
 	}
 
@@ -158,9 +158,9 @@ func (i *UPFInterfaceInfo) IP(pduSessType uint8) (net.IP, error) {
 			logger.CtxLog.Errorf("resolve addr [%s] failed", i.EndpointFQDN)
 		} else {
 			switch pduSessType {
-			case nasMessage.PDUSessionTypeIPv4:
+			case nasie.PDUSessType_IPv4:
 				return resolvedAddr.IP.To4(), nil
-			case nasMessage.PDUSessionTypeIPv6:
+			case nasie.PDUSessType_IPv6:
 				return resolvedAddr.IP.To16(), nil
 			default:
 				v4addr := resolvedAddr.IP.To4()
@@ -260,9 +260,9 @@ func NewUPF(nodeID *pfcpType.NodeID, ifaces []*factory.InterfaceUpfInfoItem) (up
 		upIface := NewUPFInterfaceInfo(iface)
 
 		switch iface.InterfaceType {
-		case models.UpInterfaceType_N3:
+		case models.Nrf_NFMgmt_UPInterfaceType_N3:
 			upf.N3Interfaces = append(upf.N3Interfaces, upIface)
-		case models.UpInterfaceType_N9:
+		case models.Nrf_NFMgmt_UPInterfaceType_N9:
 			upf.N9Interfaces = append(upf.N9Interfaces, upIface)
 		}
 	}
@@ -272,9 +272,9 @@ func NewUPF(nodeID *pfcpType.NodeID, ifaces []*factory.InterfaceUpfInfoItem) (up
 
 // *** add unit test ***//
 // GetInterface return the UPFInterfaceInfo that match input cond
-func (upf *UPF) GetInterface(interfaceType models.UpInterfaceType, dnn string) *UPFInterfaceInfo {
+func (upf *UPF) GetInterface(interfaceType models.Nrf_NFMgmt_UPInterfaceType, dnn string) *UPFInterfaceInfo {
 	switch interfaceType {
-	case models.UpInterfaceType_N3:
+	case models.Nrf_NFMgmt_UPInterfaceType_N3:
 		for i, iface := range upf.N3Interfaces {
 			for _, nwInst := range iface.NetworkInstances {
 				if nwInst == dnn {
@@ -282,7 +282,7 @@ func (upf *UPF) GetInterface(interfaceType models.UpInterfaceType, dnn string) *
 				}
 			}
 		}
-	case models.UpInterfaceType_N9:
+	case models.Nrf_NFMgmt_UPInterfaceType_N9:
 		for i, iface := range upf.N9Interfaces {
 			for _, nwInst := range iface.NetworkInstances {
 				if nwInst == dnn {

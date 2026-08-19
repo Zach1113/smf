@@ -10,10 +10,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/free5gc/nas/nasConvert"
-	"github.com/free5gc/nas/nasType"
+	nasie "github.com/free5gc/nas/ie"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/openapi/pcf/SMPolicyControl"
+	"github.com/free5gc/openapi/pcf/SMPolCtrl"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/util/flowdesc"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
@@ -24,10 +23,10 @@ type npcfService struct {
 
 	SMPolicyControlMu sync.RWMutex
 
-	SMPolicyControlClients map[string]*SMPolicyControl.APIClient
+	SMPolicyControlClients map[string]*SMPolCtrl.APIClient
 }
 
-func (s *npcfService) getSMPolicyControlClient(uri string) *SMPolicyControl.APIClient {
+func (s *npcfService) getSMPolicyControlClient(uri string) *SMPolCtrl.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -38,10 +37,10 @@ func (s *npcfService) getSMPolicyControlClient(uri string) *SMPolicyControl.APIC
 		return client
 	}
 
-	configuration := SMPolicyControl.NewConfiguration()
+	configuration := SMPolCtrl.NewConfiguration()
 	configuration.SetBasePath(uri)
 	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
-	client = SMPolicyControl.NewAPIClient(configuration)
+	client = SMPolCtrl.NewAPIClient(configuration)
 
 	s.SMPolicyControlMu.RUnlock()
 	s.SMPolicyControlMu.Lock()
@@ -52,13 +51,13 @@ func (s *npcfService) getSMPolicyControlClient(uri string) *SMPolicyControl.APIC
 
 // SendSMPolicyAssociationCreate create the session management association to the PCF
 func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (
-	string, *models.SmPolicyDecision, error,
+	string, *models.Pcf_SMPolCtrl_SmPolicyDecision, error,
 ) {
-	var client *SMPolicyControl.APIClient
+	var client *SMPolCtrl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
 	for _, service := range smContext.SelectedPCFProfile.NfServices {
-		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
+		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL {
 			client = s.getSMPolicyControlClient(service.ApiPrefix)
 		}
 	}
@@ -67,7 +66,7 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 		return "", nil, errors.Errorf("smContext not selected PCF")
 	}
 
-	smPolicyData := models.SmPolicyContextData{}
+	smPolicyData := models.Pcf_SMPolCtrl_SmPolicyContextData{}
 
 	smPolicyData.Supi = smContext.Supi
 	smPolicyData.PduSessionId = smContext.PDUSessionID
@@ -78,7 +77,7 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 		smContext.Ref,
 	)
 	smPolicyData.Dnn = smContext.Dnn
-	smPolicyData.PduSessionType = nasConvert.PDUSessionTypeToModels(smContext.SelectedPDUSessionType)
+	smPolicyData.PduSessionType = smf_context.PDUSessionTypeToModels(smContext.SelectedPDUSessionType)
 	smPolicyData.AccessType = smContext.AnType
 	smPolicyData.RatType = smContext.RatType
 	smPolicyData.Ipv4Address = smContext.PDUAddress.To4().String()
@@ -101,15 +100,15 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 	}
 
 	ctx, _, err := smf_context.GetSelf().
-		GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NrfNfManagementNfType_PCF)
+		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFType_PCF)
 	if err != nil {
 		return "", nil, err
 	}
 
 	var smPolicyID string
-	var smPolicyDecision *models.SmPolicyDecision
-	request := &SMPolicyControl.CreateSMPolicyRequest{
-		SmPolicyContextData: &smPolicyData,
+	var smPolicyDecision *models.Pcf_SMPolCtrl_SmPolicyDecision
+	request := &SMPolCtrl.CreateSMPolicyRequest{
+		RequestBody: &smPolicyData,
 	}
 
 	smPolicyDecisionFromPCF, err := client.SMPoliciesCollectionApi.CreateSMPolicy(ctx, request)
@@ -117,7 +116,7 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 		return "", nil, err
 	}
 
-	smPolicyDecision = &smPolicyDecisionFromPCF.SmPolicyDecision
+	smPolicyDecision = smPolicyDecisionFromPCF.Pcf_SMPolCtrl_SmPolicyDecision
 	loc := smPolicyDecisionFromPCF.Location
 	if smPolicyID = s.extractSMPolicyIDFromLocation(loc); len(smPolicyID) == 0 {
 		return "", nil, fmt.Errorf("SMPolicy ID parse failed")
@@ -138,12 +137,12 @@ func (s *npcfService) extractSMPolicyIDFromLocation(location string) string {
 
 func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 	smContext *smf_context.SMContext,
-	qosRules nasType.QoSRules, qosFlowDescs nasType.QoSFlowDescs,
-) (*models.SmPolicyDecision, error) {
-	updateSMPolicy := models.SmPolicyUpdateContextData{}
+	qosRules nasie.QosRules, qosFlowDescs nasie.QosFlowDescs,
+) (*models.Pcf_SMPolCtrl_SmPolicyDecision, error) {
+	updateSMPolicy := models.Pcf_SMPolCtrl_SmPolicyUpdateContextData{}
 
-	hasQoSRules := len(qosRules) > 0
-	hasQoSFlowDescs := len(qosFlowDescs) > 0
+	hasQoSRules := len(qosRules.Rules) > 0
+	hasQoSFlowDescs := len(qosFlowDescs.Descs) > 0
 
 	if !hasQoSRules && !hasQoSFlowDescs {
 		// No UE-initiated resource request; update without RES_MO_RE.
@@ -151,63 +150,53 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 		return nil, errors.New("QoS rules missing for UE-initiated request")
 	} else {
 		// UE SHOULD only create ONE QoS Flow in a request (TS 24.501 6.4.2.2)
-		rule := qosRules[0]
-		var flowDesc *nasType.QoSFlowDesc
+		rule := qosRules.Rules[0]
+		var flowDesc *nasie.QosFlowDesc
 		if hasQoSFlowDescs {
-			flowDesc = &qosFlowDescs[0]
+			flowDesc = &qosFlowDescs.Descs[0]
 		}
 
-		var ruleOp models.RuleOperation
-		switch rule.Operation {
-		case nasType.OperationCodeCreateNewQoSRule:
-			ruleOp = models.RuleOperation_CREATE_PCC_RULE
-		case nasType.OperationCodeDeleteExistingQoSRule:
-			ruleOp = models.RuleOperation_DELETE_PCC_RULE
-		case nasType.OperationCodeModifyExistingQoSRuleAndAddPacketFilters:
-			ruleOp = models.RuleOperation_MODIFY_PCC_RULE_AND_ADD_PACKET_FILTERS
-		case nasType.OperationCodeModifyExistingQoSRuleAndDeletePacketFilters:
-			ruleOp = models.RuleOperation_MODIFY_PCC_RULE_AND_DELETE_PACKET_FILTERS
-		case nasType.OperationCodeModifyExistingQoSRuleAndReplaceAllPacketFilters:
-			ruleOp = models.RuleOperation_MODIFY_PCC_RULE_AND_REPLACE_PACKET_FILTERS
-		case nasType.OperationCodeModifyExistingQoSRuleWithoutModifyingPacketFilters:
-			ruleOp = models.RuleOperation_MODIFY_PCC_RULE_WITHOUT_MODIFY_PACKET_FILTERS
+		var ruleOp models.Pcf_SMPolCtrl_RuleOperation
+		switch rule.OpCode {
+		case nasie.OpCode_CreateNewQosRule:
+			ruleOp = models.Pcf_SMPolCtrl_RuleOperation_CREATE_PCC_RULE
+		case nasie.OpCode_DelExistingQosRule:
+			ruleOp = models.Pcf_SMPolCtrl_RuleOperation_DELETE_PCC_RULE
+		case nasie.OpCode_ModifyAddPktFilters:
+			ruleOp = models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_AND_ADD_PACKET_FILTERS
+		case nasie.OpCode_ModifyDelPktFilters:
+			ruleOp = models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_AND_DELETE_PACKET_FILTERS
+		case nasie.OpCode_ModifyReplaceAllPktFilters:
+			ruleOp = models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_AND_REPLACE_PACKET_FILTERS
+		case nasie.OpCode_ModifyWoModifyingPktFilters:
+			ruleOp = models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_WITHOUT_MODIFY_PACKET_FILTERS
 		default:
 			return nil, errors.New("QoS Rule Operation Unknown")
 		}
 
-		requiresFlowDesc := rule.Operation == nasType.OperationCodeCreateNewQoSRule ||
-			rule.Operation == nasType.OperationCodeModifyExistingQoSRuleWithoutModifyingPacketFilters
+		requiresFlowDesc := rule.OpCode == nasie.OpCode_CreateNewQosRule ||
+			rule.OpCode == nasie.OpCode_ModifyWoModifyingPktFilters
 		if requiresFlowDesc && flowDesc == nil {
 			return nil, errors.New("QoS flow description required for QoS rule operation")
 		}
 
-		updateSMPolicy.RepPolicyCtrlReqTriggers = []models.PolicyControlRequestTrigger{
-			models.PolicyControlRequestTrigger_RES_MO_RE,
+		updateSMPolicy.RepPolicyCtrlReqTriggers = []models.Pcf_SMPolCtrl_PolicyControlRequestTrigger{
+			models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_RES_MO_RE,
 		}
 
-		ueInitResReq := &models.UeInitiatedResourceRequest{}
+		ueInitResReq := &models.Pcf_SMPolCtrl_UeInitiatedResourceRequest{}
 		ueInitResReq.RuleOp = ruleOp
 		ueInitResReq.Precedence = int32(rule.Precedence)
 		if flowDesc != nil {
-			ueInitResReq.ReqQos = new(models.RequestedQos)
-			for _, parameter := range flowDesc.Parameters {
-				switch parameter.Identifier() {
-				case nasType.ParameterIdentifier5QI:
-					para5Qi := parameter.(*nasType.QoSFlow5QI)
-					ueInitResReq.ReqQos.Var5qi = int32(para5Qi.FiveQI)
-				case nasType.ParameterIdentifierGFBRUplink:
-					paraGFBRUplink := parameter.(*nasType.QoSFlowGFBRUplink)
-					ueInitResReq.ReqQos.GbrUl = s.nasBitRateToString(paraGFBRUplink.Value, paraGFBRUplink.Unit)
-				case nasType.ParameterIdentifierGFBRDownlink:
-					paraGFBRDownlink := parameter.(*nasType.QoSFlowGFBRDownlink)
-					ueInitResReq.ReqQos.GbrDl = s.nasBitRateToString(paraGFBRDownlink.Value, paraGFBRDownlink.Unit)
-				}
-			}
+			ueInitResReq.ReqQos = new(models.Pcf_SMPolCtrl_RequestedQos)
+			ueInitResReq.ReqQos.Var5qi = int32(flowDesc.FiveQI)
+			ueInitResReq.ReqQos.GbrUl = flowDesc.GFBRUplink
+			ueInitResReq.ReqQos.GbrDl = flowDesc.GFBRDownlink
 		}
 
 		updateSMPolicy.UeInitResReq = ueInitResReq
 
-		for _, pf := range rule.PacketFilterList {
+		for _, pf := range rule.PktFilterList {
 			if PackFiltInfo, err := s.buildPktFilterInfo(pf); err != nil {
 				smContext.Log.Warning("Build PackFiltInfo failed", err)
 				continue
@@ -218,159 +207,64 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 	}
 
 	ctx, _, err := smf_context.GetSelf().
-		GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NrfNfManagementNfType_PCF)
+		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFType_PCF)
 	if err != nil {
 		return nil, err
 	}
 
-	var client *SMPolicyControl.APIClient
+	var client *SMPolCtrl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
 	for _, service := range smContext.SelectedPCFProfile.NfServices {
-		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
+		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL {
 			client = s.getSMPolicyControlClient(service.ApiPrefix)
 		}
 	}
 
-	var smPolicyDecision *models.SmPolicyDecision
-	request := &SMPolicyControl.UpdateSMPolicyRequest{
-		SmPolicyId:                &smContext.SMPolicyID,
-		SmPolicyUpdateContextData: &updateSMPolicy,
+	var smPolicyDecision *models.Pcf_SMPolCtrl_SmPolicyDecision
+	request := &SMPolCtrl.UpdateSMPolicyRequest{
+		SmPolicyId:  &smContext.SMPolicyID,
+		RequestBody: &updateSMPolicy,
 	}
 
 	smPolicyDecisionFromPCF, err := client.IndividualSMPolicyDocumentApi.UpdateSMPolicy(ctx, request)
 	if err != nil {
 		return nil, fmt.Errorf("update sm policy [%s] association failed: %s", smContext.SMPolicyID, err)
 	}
-	smPolicyDecision = &smPolicyDecisionFromPCF.SmPolicyDecision
+	smPolicyDecision = smPolicyDecisionFromPCF.Pcf_SMPolCtrl_SmPolicyDecision
 	return smPolicyDecision, nil
 }
 
-func (s *npcfService) nasBitRateToString(value uint16, unit nasType.QoSFlowBitRateUnit) string {
-	var base int
-	var unitStr string
-	switch unit {
-	case nasType.QoSFlowBitRateUnit1Kbps:
-		base = 1
-		unitStr = "Kbps"
-	case nasType.QoSFlowBitRateUnit4Kbps:
-		base = 4
-		unitStr = "Kbps"
-	case nasType.QoSFlowBitRateUnit16Kbps:
-		base = 16
-		unitStr = "Kbps"
-	case nasType.QoSFlowBitRateUnit64Kbps:
-		base = 64
-		unitStr = "Kbps"
-	case nasType.QoSFlowBitRateUnit256Kbps:
-		base = 256
-		unitStr = "Kbps"
-	case nasType.QoSFlowBitRateUnit1Mbps:
-		base = 1
-		unitStr = "Mbps"
-	case nasType.QoSFlowBitRateUnit4Mbps:
-		base = 4
-		unitStr = "Mbps"
-	case nasType.QoSFlowBitRateUnit16Mbps:
-		base = 16
-		unitStr = "Mbps"
-	case nasType.QoSFlowBitRateUnit64Mbps:
-		base = 64
-		unitStr = "Mbps"
-	case nasType.QoSFlowBitRateUnit256Mbps:
-		base = 256
-		unitStr = "Mbps"
-	case nasType.QoSFlowBitRateUnit1Gbps:
-		base = 1
-		unitStr = "Gbps"
-	case nasType.QoSFlowBitRateUnit4Gbps:
-		base = 4
-		unitStr = "Gbps"
-	case nasType.QoSFlowBitRateUnit16Gbps:
-		base = 16
-		unitStr = "Gbps"
-	case nasType.QoSFlowBitRateUnit64Gbps:
-		base = 64
-		unitStr = "Gbps"
-	case nasType.QoSFlowBitRateUnit256Gbps:
-		base = 256
-		unitStr = "Gbps"
-	case nasType.QoSFlowBitRateUnit1Tbps:
-		base = 1
-		unitStr = "Tbps"
-	case nasType.QoSFlowBitRateUnit4Tbps:
-		base = 4
-		unitStr = "Tbps"
-	case nasType.QoSFlowBitRateUnit16Tbps:
-		base = 16
-		unitStr = "Tbps"
-	case nasType.QoSFlowBitRateUnit64Tbps:
-		base = 64
-		unitStr = "Tbps"
-	case nasType.QoSFlowBitRateUnit256Tbps:
-		base = 256
-		unitStr = "Tbps"
-	case nasType.QoSFlowBitRateUnit1Pbps:
-		base = 1
-		unitStr = "Pbps"
-	case nasType.QoSFlowBitRateUnit4Pbps:
-		base = 4
-		unitStr = "Pbps"
-	case nasType.QoSFlowBitRateUnit16Pbps:
-		base = 16
-		unitStr = "Pbps"
-	case nasType.QoSFlowBitRateUnit64Pbps:
-		base = 64
-		unitStr = "Pbps"
-	case nasType.QoSFlowBitRateUnit256Pbps:
-		base = 256
-		unitStr = "Pbps"
-	default:
-		base = 1
-		unitStr = "Kbps"
+func parsePortRange(portRange string) []flowdesc.PortRange {
+	if portRange == "" {
+		return nil
 	}
-
-	return fmt.Sprintf("%d %s", base*int(value), unitStr)
+	ports := strings.Split(portRange, "-")
+	start, err := strconv.ParseUint(ports[0], 10, 16)
+	if err != nil {
+		return nil
+	}
+	end := start
+	if len(ports) > 1 {
+		if end, err = strconv.ParseUint(ports[1], 10, 16); err != nil {
+			return nil
+		}
+	}
+	return []flowdesc.PortRange{{Start: uint16(start), End: uint16(end)}}
 }
 
-func (s *npcfService) StringToNasBitRate(str string) (uint16, nasType.QoSFlowBitRateUnit, error) {
-	strSegment := strings.Split(str, " ")
+func (s *npcfService) buildPktFilterInfo(pf nasie.PacketFilter) (*models.Pcf_SMPolCtrl_PacketFilterInfo, error) {
+	pfInfo := &models.Pcf_SMPolCtrl_PacketFilterInfo{}
 
-	var unit nasType.QoSFlowBitRateUnit
-	switch strSegment[1] {
-	case "Kbps":
-		unit = nasType.QoSFlowBitRateUnit1Kbps
-	case "Mbps":
-		unit = nasType.QoSFlowBitRateUnit1Mbps
-	case "Gbps":
-		unit = nasType.QoSFlowBitRateUnit1Gbps
-	case "Tbps":
-		unit = nasType.QoSFlowBitRateUnit1Tbps
-	case "Pbps":
-		unit = nasType.QoSFlowBitRateUnit1Pbps
+	switch pf.Dir {
+	case nasie.PFD_Downlink:
+		pfInfo.FlowDirection = models.Pcf_SMPolCtrl_FlowDirection_DOWNLINK
+	case nasie.PFD_Uplink:
+		pfInfo.FlowDirection = models.Pcf_SMPolCtrl_FlowDirection_UPLINK
+	case nasie.PFD_BiDir:
+		pfInfo.FlowDirection = models.Pcf_SMPolCtrl_FlowDirection_BIDIRECTIONAL
 	default:
-		unit = nasType.QoSFlowBitRateUnit1Kbps
-	}
-
-	if value, err := strconv.Atoi(strSegment[0]); err != nil {
-		return 0, 0, err
-	} else {
-		return uint16(value), unit, err
-	}
-}
-
-func (s *npcfService) buildPktFilterInfo(pf nasType.PacketFilter) (*models.PacketFilterInfo, error) {
-	pfInfo := &models.PacketFilterInfo{}
-
-	switch pf.Direction {
-	case nasType.PacketFilterDirectionDownlink:
-		pfInfo.FlowDirection = models.FlowDirection_DOWNLINK
-	case nasType.PacketFilterDirectionUplink:
-		pfInfo.FlowDirection = models.FlowDirection_UPLINK
-	case nasType.PacketFilterDirectionBidirectional:
-		pfInfo.FlowDirection = models.FlowDirection_BIDIRECTIONAL
-	default:
-		pfInfo.FlowDirection = models.FlowDirection_UNSPECIFIED
+		pfInfo.FlowDirection = models.Pcf_SMPolCtrl_FlowDirection_UNSPECIFIED
 	}
 
 	const ProtocolNumberAny = 0xfc
@@ -380,61 +274,30 @@ func (s *npcfService) buildPktFilterInfo(pf nasType.PacketFilter) (*models.Packe
 		Proto:  ProtocolNumberAny,
 	}
 
-	for _, component := range pf.Components {
-		switch component.Type() {
-		case nasType.PacketFilterComponentTypeIPv4RemoteAddress:
-			ipv4Remote := component.(*nasType.PacketFilterIPv4RemoteAddress)
-			remoteIPnet := net.IPNet{
-				IP:   ipv4Remote.Address,
-				Mask: ipv4Remote.Mask,
-			}
+	contents := pf.Contents
+	if contents.RemoteAddr != "" && contents.RemoteAddr != "any" {
+		if _, remoteIPnet, err := net.ParseCIDR(contents.RemoteAddr); err == nil {
 			packetFilter.Src = remoteIPnet.String()
-		case nasType.PacketFilterComponentTypeIPv4LocalAddress:
-			ipv4Local := component.(*nasType.PacketFilterIPv4LocalAddress)
-			localIPnet := net.IPNet{
-				IP:   ipv4Local.Address,
-				Mask: ipv4Local.Mask,
-			}
-			packetFilter.Dst = localIPnet.String()
-		case nasType.PacketFilterComponentTypeProtocolIdentifierOrNextHeader:
-			protoNumber := component.(*nasType.PacketFilterProtocolIdentifier)
-			packetFilter.Proto = protoNumber.Value
-
-		case nasType.PacketFilterComponentTypeSingleLocalPort:
-			localPort := component.(*nasType.PacketFilterSingleLocalPort)
-			packetFilter.DstPorts = append(packetFilter.DstPorts, flowdesc.PortRange{
-				Start: localPort.Value,
-				End:   localPort.Value,
-			})
-		case nasType.PacketFilterComponentTypeLocalPortRange:
-			localPortRange := component.(*nasType.PacketFilterLocalPortRange)
-			packetFilter.DstPorts = append(packetFilter.DstPorts, flowdesc.PortRange{
-				Start: localPortRange.LowLimit,
-				End:   localPortRange.HighLimit,
-			})
-		case nasType.PacketFilterComponentTypeSingleRemotePort:
-			remotePort := component.(*nasType.PacketFilterSingleRemotePort)
-			packetFilter.SrcPorts = append(packetFilter.SrcPorts, flowdesc.PortRange{
-				Start: remotePort.Value,
-				End:   remotePort.Value,
-			})
-		case nasType.PacketFilterComponentTypeRemotePortRange:
-			remotePortRange := component.(*nasType.PacketFilterRemotePortRange)
-			packetFilter.SrcPorts = append(packetFilter.SrcPorts, flowdesc.PortRange{
-				Start: remotePortRange.LowLimit,
-				End:   remotePortRange.HighLimit,
-			})
-		case nasType.PacketFilterComponentTypeSecurityParameterIndex:
-			securityParameter := component.(*nasType.PacketFilterSecurityParameterIndex)
-			pfInfo.Spi = fmt.Sprintf("%04x", securityParameter.Index)
-		case nasType.PacketFilterComponentTypeTypeOfServiceOrTrafficClass:
-			serviceClass := component.(*nasType.PacketFilterServiceClass)
-			pfInfo.TosTrafficClass = fmt.Sprintf("%x%x", serviceClass.Class, serviceClass.Mask)
-		case nasType.PacketFilterComponentTypeFlowLabel:
-			flowLabel := component.(*nasType.PacketFilterFlowLabel)
-			pfInfo.FlowLabel = fmt.Sprintf("%03x", flowLabel.Label)
 		}
 	}
+	if contents.LocalAddr != "" && contents.LocalAddr != "any" && contents.LocalAddr != "assigned" {
+		if _, localIPnet, err := net.ParseCIDR(contents.LocalAddr); err == nil {
+			packetFilter.Dst = localIPnet.String()
+		}
+	}
+	if contents.HavePIorNH {
+		packetFilter.Proto = contents.PIorNH
+	}
+	if localPorts := parsePortRange(contents.LocalPortRange); localPorts != nil {
+		packetFilter.DstPorts = append(packetFilter.DstPorts, localPorts...)
+	}
+	if remotePorts := parsePortRange(contents.RemotePortRange); remotePorts != nil {
+		packetFilter.SrcPorts = append(packetFilter.SrcPorts, remotePorts...)
+	}
+	// SPI, TosTrafficClass and FlowLabel are already hex strings in the new IE.
+	pfInfo.Spi = contents.SPI
+	pfInfo.TosTrafficClass = contents.TosTrafficClass
+	pfInfo.FlowLabel = contents.FlowLabel
 
 	if desc, err := flowdesc.Encode(packetFilter); err != nil {
 		return nil, err
@@ -446,11 +309,11 @@ func (s *npcfService) buildPktFilterInfo(pf nasType.PacketFilter) (*models.Packe
 }
 
 func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.SMContext) error {
-	var client *SMPolicyControl.APIClient
+	var client *SMPolCtrl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
 	for _, service := range smContext.SelectedPCFProfile.NfServices {
-		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
+		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL {
 			client = s.getSMPolicyControlClient(service.ApiPrefix)
 		}
 	}
@@ -460,14 +323,14 @@ func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.
 	}
 
 	ctx, _, err := smf_context.GetSelf().
-		GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NrfNfManagementNfType_PCF)
+		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFType_PCF)
 	if err != nil {
 		return err
 	}
 
-	request := &SMPolicyControl.DeleteSMPolicyRequest{
-		SmPolicyId:         &smContext.SMPolicyID,
-		SmPolicyDeleteData: &models.SmPolicyDeleteData{},
+	request := &SMPolCtrl.DeleteSMPolicyRequest{
+		SmPolicyId:  &smContext.SMPolicyID,
+		RequestBody: &models.Pcf_SMPolCtrl_SmPolicyDeleteData{},
 	}
 
 	_, err = client.IndividualSMPolicyDocumentApi.DeleteSMPolicy(ctx, request)
