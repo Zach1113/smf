@@ -5,12 +5,11 @@ go 1.26.2
 require (
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/davecgh/go-spew v1.1.1
-	github.com/free5gc/aper v1.1.1
-	github.com/free5gc/nas v1.2.3
-	github.com/free5gc/ngap v1.1.3
-	github.com/free5gc/openapi v1.2.4
+	github.com/free5gc/nas v1.3.0
+	github.com/free5gc/ngap v1.2.0
+	github.com/free5gc/openapi v1.3.0
 	github.com/free5gc/pfcp v1.1.2
-	github.com/free5gc/util v1.3.2
+	github.com/free5gc/util v1.4.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0
 	github.com/h2non/gock v1.2.0
@@ -24,9 +23,10 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 )
 
-replace github.com/free5gc/openapi => github.com/carlhus/openapi v0.0.0-20260810150356-d8cc967ad99b
+replace github.com/free5gc/openapi => github.com/carlhus/openapi v0.0.0-20260821053527-127c60ebf021
 
 require (
+	github.com/aead/cmac v0.0.0-20160719120800-7af84192f0b1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect

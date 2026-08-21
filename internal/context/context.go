@@ -24,7 +24,7 @@ func Init(config *factory.Config) {
 }
 
 type NFContext interface {
-	AuthorizationCheck(token string, serviceName models.ServiceName) error
+	AuthorizationCheck(token string, serviceName models.Nrf_NFMgmt_ServiceName) error
 }
 
 var _ NFContext = &SMFContext{}
@@ -45,7 +45,7 @@ type SMFContext struct {
 	ExternalAddr string
 	ListenAddr   string
 
-	UDMProfile models.NrfNfDiscoveryNfProfile
+	UDMProfile models.Nrf_NFDisc_NFProfile
 	NfProfile  NFProfile
 
 	Key    string
@@ -311,7 +311,7 @@ func GetUEDefaultPathPool(groupName string) *UEDefaultPaths {
 	return smfContext.UEDefaultPathPool[groupName]
 }
 
-func (c *SMFContext) GetTokenCtx(serviceName models.ServiceName, targetNF models.NrfNfManagementNfType) (
+func (c *SMFContext) GetTokenCtx(serviceName models.Nrf_NFMgmt_ServiceName, targetNF models.Nrf_NFMgmt_NFType) (
 	context.Context, *models.ProblemDetails, error,
 ) {
 	if !c.OAuth2Required {
@@ -320,8 +320,8 @@ func (c *SMFContext) GetTokenCtx(serviceName models.ServiceName, targetNF models
 	return oauth.GetTokenCtx(c.tokenRequest(serviceName, targetNF))
 }
 
-func (c *SMFContext) GetTokenCtxForNFInstance(serviceName models.ServiceName,
-	targetNF models.NrfNfManagementNfType, targetNFInstanceID string,
+func (c *SMFContext) GetTokenCtxForNFInstance(serviceName models.Nrf_NFMgmt_ServiceName,
+	targetNF models.Nrf_NFMgmt_NFType, targetNFInstanceID string,
 ) (context.Context, *models.ProblemDetails, error) {
 	if !c.OAuth2Required {
 		return context.TODO(), nil, nil
@@ -336,23 +336,23 @@ func (c *SMFContext) GetTokenCtxForNFInstance(serviceName models.ServiceName,
 	return oauth.GetTokenCtx(c.tokenRequestForNFInstance(serviceName, targetNF, targetNFInstanceID))
 }
 
-func (c *SMFContext) GetTokenCtxForNRF(serviceName models.ServiceName) (
+func (c *SMFContext) GetTokenCtxForNRF(serviceName models.Nrf_NFMgmt_ServiceName) (
 	context.Context, *models.ProblemDetails, error,
 ) {
-	return c.GetTokenCtxForNFInstance(serviceName, models.NrfNfManagementNfType_NRF, c.NrfNfInstanceID)
+	return c.GetTokenCtxForNFInstance(serviceName, models.Nrf_NFMgmt_NFType_NRF, c.NrfNfInstanceID)
 }
 
-func (c *SMFContext) tokenRequest(serviceName models.ServiceName,
-	targetNF models.NrfNfManagementNfType,
+func (c *SMFContext) tokenRequest(serviceName models.Nrf_NFMgmt_ServiceName,
+	targetNF models.Nrf_NFMgmt_NFType,
 ) oauth.TokenRequest {
 	return oauth.TokenRequest{
-		ConsumerNFType: models.NrfNfManagementNfType_SMF, ConsumerNFInstanceID: c.NfInstanceID,
+		ConsumerNFType: models.Nrf_NFMgmt_NFType_SMF, ConsumerNFInstanceID: c.NfInstanceID,
 		TargetNFType: targetNF, NRFURI: c.NrfUri, Scope: string(serviceName),
 	}
 }
 
-func (c *SMFContext) tokenRequestForNFInstance(serviceName models.ServiceName,
-	targetNF models.NrfNfManagementNfType, targetNFInstanceID string,
+func (c *SMFContext) tokenRequestForNFInstance(serviceName models.Nrf_NFMgmt_ServiceName,
+	targetNF models.Nrf_NFMgmt_NFType, targetNFInstanceID string,
 ) oauth.TokenRequest {
 	request := c.tokenRequest(serviceName, targetNF)
 	request.TargetNFInstanceID = targetNFInstanceID
@@ -377,11 +377,11 @@ func (c *SMFContext) SetOAuth2Required(required bool) error {
 	return nil
 }
 
-func (c *SMFContext) AuthorizationCheck(token string, serviceName models.ServiceName) error {
+func (c *SMFContext) AuthorizationCheck(token string, serviceName models.Nrf_NFMgmt_ServiceName) error {
 	if !c.OAuth2Required {
 		return nil
 	}
 	return oauth.VerifyOAuth(token, string(serviceName), oauth.AudiencePolicy{
-		NFInstanceID: c.NfInstanceID, NFType: models.NrfNfManagementNfType_SMF,
+		NFInstanceID: c.NfInstanceID, NFType: models.Nrf_NFMgmt_NFType_SMF,
 	}, c.NrfNfInstanceID, c.NrfCertPem)
 }
